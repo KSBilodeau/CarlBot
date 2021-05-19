@@ -8,9 +8,6 @@ use serenity::model::prelude::{Ready};
 use serenity::model::interactions::Interaction;
 use serenity::framework::StandardFramework;
 use serenity::client::bridge::gateway::GatewayIntents;
-use serenity::model::id::UserId;
-use serenity::model::user::UserPublicFlags;
-use serenity::model::guild::Target::User;
 
 struct Handler;
 
