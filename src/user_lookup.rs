@@ -83,7 +83,7 @@ async fn status(ctx: &Context, interaction: &Interaction, user: &SUser) -> Strin
 }
 
 async fn nickname(ctx: &Context, id: &GuildId, s_user: &SUser, user: &User) -> String {
-    let bot_verified_emoji = "<:bot1:844387373848461332><:bot2:844387418483720202>";
+    let bot_verified_emoji = "<:bot1:844733440481820673><:bot2:844733440665845780>";
     let bot_emoji = "<:bot3:844702520646696991><:bot4:844702593002242068>";
 
     if let Some(nick) = s_user.nick_in(&ctx.http, id).await {
