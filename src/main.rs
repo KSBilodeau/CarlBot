@@ -1,13 +1,17 @@
-mod user_lookup;
-
 use std::env;
-use serenity::Client;
+
 use serenity::async_trait;
-use serenity::prelude::{EventHandler, Context};
-use serenity::model::prelude::{Ready};
-use serenity::model::interactions::Interaction;
-use serenity::framework::StandardFramework;
+use serenity::Client;
 use serenity::client::bridge::gateway::GatewayIntents;
+use serenity::framework::StandardFramework;
+use serenity::model::interactions::Interaction;
+use serenity::model::interactions::InteractionData::{ApplicationCommand, MessageComponent};
+use serenity::model::prelude::Ready;
+use serenity::prelude::{Context, EventHandler};
+
+use interactions::user_lookup;
+
+mod interactions;
 
 struct Handler;
 
@@ -19,13 +23,18 @@ impl EventHandler for Handler {
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
         if let Some(interaction_data) = interaction.data.as_ref() {
-            match interaction_data.name.as_str() {
-                "userlookup" => {
-                    if let Err(why) = user_lookup::command(ctx, interaction).await {
-                        println!("{:#?}", why);
-                    }
+            if let ApplicationCommand(command_data) = interaction_data {
+                match command_data.name.as_str() {
+                    "userinfo" => {
+                        if let Err(why) = user_lookup::UserInfoCommand::new(&ctx, &interaction)
+                            .execute(&command_data).await {
+                            eprintln!("{:#?}", why);
+                        }
+                    },
+                    _ => {}
                 }
-                _ => {}
+            } else if let MessageComponent(_component_data) = interaction_data {
+
             }
         } else {
             println!("No data was sent!");
