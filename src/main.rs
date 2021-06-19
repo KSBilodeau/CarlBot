@@ -1,9 +1,14 @@
+use std::collections::HashMap;
 use std::env;
+use std::path::Path;
 
 use serenity::async_trait;
 use serenity::Client;
 use serenity::client::bridge::gateway::GatewayIntents;
+use serenity::framework::standard::CommandResult;
+use serenity::framework::standard::macros::*;
 use serenity::framework::StandardFramework;
+use serenity::model::channel::Message;
 use serenity::model::interactions::Interaction;
 use serenity::model::interactions::InteractionData::{ApplicationCommand, MessageComponent};
 use serenity::model::prelude::Ready;
@@ -11,7 +16,13 @@ use serenity::prelude::{Context, EventHandler};
 
 use interactions::user_lookup;
 
+use crate::user::CachedUsers;
+
 mod interactions;
+mod user;
+
+#[group]
+struct General;
 
 struct Handler;
 
@@ -46,7 +57,9 @@ impl EventHandler for Handler {
 async fn main() {
     let token = env::var("DISCORD_TOKEN").expect("Discord Token not in env_var!");
 
-    let framework = StandardFramework::new();
+    let framework = StandardFramework::new()
+        .configure(|c| c.prefix("CARL "))
+        .group(&GENERAL_GROUP);
 
     let mut client = Client::builder(token)
         .application_id(820807331016081439)
@@ -55,6 +68,11 @@ async fn main() {
         .intents(GatewayIntents::non_privileged() | GatewayIntents::GUILD_MEMBERS | GatewayIntents::GUILD_PRESENCES)
         .await
         .expect("Error creating client!");
+
+    {
+        let mut data = client.data.write().await;
+        data.insert::<CachedUsers>(HashMap::default());
+    }
 
     if let Err(why) = client.start().await {
         println!("An error occurred while running the application: {:#?}", why)

@@ -1,10 +1,11 @@
-use serde::{Deserialize};
-use serenity::model::prelude::{User, ApplicationCommandInteractionData, InteractionApplicationCommandCallbackDataFlags};
+use serde::Deserialize;
 use serenity::model::interactions::ApplicationCommandInteractionDataOptionValue::User as AppValUser;
 use serenity::model::interactions::Interaction;
-use serenity::prelude::Context;
-use crate::interactions::{UserRetrievalError, make_get_request};
+use serenity::model::prelude::{ApplicationCommandInteractionData, InteractionApplicationCommandCallbackDataFlags, User};
 use serenity::model::prelude::InteractionResponseType::DeferredChannelMessageWithSource;
+use serenity::prelude::Context;
+
+use crate::interactions::{discord_get_request, UserRetrievalError};
 
 pub struct UserInfoCommand<'a> {
     ctx: &'a Context,
@@ -24,6 +25,7 @@ impl<'a> UserInfoCommand<'a> {
             r.kind(DeferredChannelMessageWithSource)
                 .interaction_response_data(|d| {
                     d.content("Carl is thinking")
+                        .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
                 })
         }).await?;
 
@@ -44,10 +46,9 @@ impl<'a> UserInfoCommand<'a> {
                 bot_application = Some(TargetUser::get_bot_application(user.user_data.id.parse().unwrap()).await?);
             }
 
-            println!("followup");
             self.interaction.create_followup_message(&self.ctx.http, |f| {
                 f.create_embed(|e| {
-                    e.title(format!("{}#{}", &user.user_data.username, &user.user_data.discriminator))
+                    e.title(format!("{}#{} {}", &user.user_data.username, &user.user_data.discriminator, user.nick))
                         .thumbnail(&user.avatar)
                         .url(&user.avatar)
                         .field("ID", &user.user_data.id, false);
@@ -61,11 +62,12 @@ impl<'a> UserInfoCommand<'a> {
                                 let url = format!("https://cdn.discordapp.com/avatars/{}/{}.webp?size=1024", app.id, app.icon);
                                 println!("{}", url);
                                 f.icon_url(url)
-                                    .text(format!("Brought to you by {}!", app.name))
+                                    .text(format!("Brought to you by {}", app.name))
                             });
                     }
                     e.field("Account Creation Date", &user.creation_date, false)
                 })
+                    .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
             }).await?;
         } else if let Err(why) = target_user {
             eprintln!("{:#?}", why);
@@ -85,8 +87,8 @@ struct PartialUser {
 
 impl PartialUser {
     pub async fn fetch_from_id(id: u64) -> Result<PartialUser, UserRetrievalError> {
-        let pathway = format!("https://discord.com/api/v9/users/{}", id);
-        Ok(serde_json::from_str::<PartialUser>(&make_get_request(&pathway).await?)?)
+        let pathway = format!("users/{}", id);
+        Ok(serde_json::from_str::<PartialUser>(&discord_get_request(&pathway).await?)?)
     }
 }
 
@@ -159,7 +161,7 @@ impl TargetUser {
     async fn nick(command: &UserInfoCommand<'_>, user: &User) -> String {
         if command.interaction.guild_id.is_some() {
             if let Some(nick) = user.nick_in(&command.ctx.http, command.interaction.guild_id.unwrap()).await {
-                return nick;
+                return format!("aka {}", nick);
             }
         }
 
@@ -205,9 +207,9 @@ impl TargetUser {
     }
 
     async fn get_bot_application(id: u64) -> Result<Application, UserRetrievalError> {
-        let pathway = format!("https://discord.com/api/v9/applications/{}/rpc", id);
+        let pathway = format!("applications/{}/rpc", id);
 
-        Ok(serde_json::from_str::<Application>(&make_get_request(&pathway).await?)?)
+        Ok(serde_json::from_str::<Application>(&discord_get_request(&pathway).await?)?)
     }
 
     fn is_verified_bot(user: &User) -> bool {
