@@ -1,9 +1,8 @@
 use std::env;
-use crate::user::UserRetrievalError;
 
 pub mod user_lookup;
 
-pub async fn discord_get_request(pathway: &str) -> Result<String, UserRetrievalError> {
+pub async fn discord_get_pathway(pathway: &str) -> reqwest::Result<String> {
     let pathway = format!("https://discord.com/api/v9/{}", pathway);
     let token = env::var("AUTH").expect("Discord Token not in env_var!");
 
@@ -14,4 +13,8 @@ pub async fn discord_get_request(pathway: &str) -> Result<String, UserRetrievalE
         .await?
         .text()
         .await?)
+}
+
+fn avatar_url(id: &str, avatar_hash: &str, size: u64) -> String {
+    format!("https://cdn.discordapp.com/avatars/{}/{}.webp?size={}", id, avatar_hash, size)
 }

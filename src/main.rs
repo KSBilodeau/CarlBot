@@ -1,6 +1,7 @@
-use std::collections::HashMap;
 use std::env;
-use std::path::Path;
+use std::process::exit;
+use std::thread::sleep;
+use std::time::Duration;
 
 use serenity::async_trait;
 use serenity::Client;
@@ -9,46 +10,60 @@ use serenity::framework::standard::CommandResult;
 use serenity::framework::standard::macros::*;
 use serenity::framework::StandardFramework;
 use serenity::model::channel::Message;
-use serenity::model::interactions::Interaction;
-use serenity::model::interactions::InteractionData::{ApplicationCommand, MessageComponent};
-use serenity::model::prelude::Ready;
+use serenity::model::prelude::{Interaction, InteractionApplicationCommandCallbackDataFlags, InteractionResponseType, Ready};
+use serenity::model::prelude::application_command::ApplicationCommandInteraction;
+use serenity::model::prelude::Interaction::{ApplicationCommand, Ping};
+use serenity::model::prelude::Interaction::MessageComponent;
 use serenity::prelude::{Context, EventHandler};
 
-use interactions::user_lookup;
+use crate::commands::user_lookup::USER_INFO_COMMAND;
 
-use crate::user::CachedUsers;
-
-mod interactions;
-mod user;
+mod commands;
 
 #[group]
+#[commands(explode, user_info)]
 struct General;
 
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
-    async fn ready(&self, _ctx: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
+    async fn ready(&self, _ctx: Context, _ready: Ready) {
+        println!("Carl has connected!");
     }
 
     async fn interaction_create(&self, ctx: Context, interaction: Interaction) {
-        if let Some(interaction_data) = interaction.data.as_ref() {
-            if let ApplicationCommand(command_data) = interaction_data {
+        match interaction {
+            ApplicationCommand(interaction) => {
+                let command_data = &interaction.data;
+
+                if let Err(why) = send_deferred_response(&ctx, &interaction).await {
+                    eprintln!("{:#?}", why);
+                }
+
                 match command_data.name.as_str() {
                     "userinfo" => {
-                        if let Err(why) = user_lookup::UserInfoCommand::new(&ctx, &interaction)
-                            .execute(&command_data).await {
-                            eprintln!("{:#?}", why);
+                        if command_data.options.len() > 0 {
+                            if let Ok(user) = commands::user_lookup::user_from_interaction_option(&command_data.options[0]).await {
+                                if let Err(why) = commands::user_lookup::send_user_info_command_response(&ctx, &interaction, &user).await {
+                                    eprintln!("{:#?}", why);
+                                }
+                            }
+                        } else {
+                            if let Err(why) = commands::user_lookup::send_user_info_command_response(&ctx, &interaction, &interaction.user).await {
+                                eprintln!("{:#?}", why);
+                            }
                         }
                     },
                     _ => {}
                 }
-            } else if let MessageComponent(_component_data) = interaction_data {
+            },
+            MessageComponent(_component) => {
 
-            }
-        } else {
-            println!("No data was sent!");
+            },
+            Ping(_ping) => {
+
+            },
         }
     }
 }
@@ -69,12 +84,30 @@ async fn main() {
         .await
         .expect("Error creating client!");
 
-    {
-        let mut data = client.data.write().await;
-        data.insert::<CachedUsers>(HashMap::default());
-    }
-
     if let Err(why) = client.start().await {
         println!("An error occurred while running the application: {:#?}", why)
     }
+}
+
+async fn send_deferred_response(ctx: &Context, interaction: &ApplicationCommandInteraction) -> serenity::Result<()> {
+    interaction.create_interaction_response(&ctx.http, |r| {
+        r.interaction_response_data(|d| {
+            d.content("Carl is thinking")
+                .flags(InteractionApplicationCommandCallbackDataFlags::EPHEMERAL)
+        })
+            .kind(InteractionResponseType::DeferredChannelMessageWithSource)
+    }).await
+}
+
+const CARL_END_GIF: &str = "https://tenor.com/view/explosion-mushroom-cloud-atomic-bomb-bomb-boom-gif-4464831";
+
+#[command]
+#[owners_only]
+async fn explode(ctx: &Context, msg: &Message) -> CommandResult {
+    let reply = msg.reply(&ctx.http, CARL_END_GIF).await?;
+    sleep(Duration::from_secs(10));
+    reply.delete(&ctx.http).await?;
+    msg.delete(&ctx.http).await?;
+
+    exit(0);
 }
